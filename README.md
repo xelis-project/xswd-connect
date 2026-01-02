@@ -6,10 +6,11 @@ Connect web dApps to mobile XELIS wallets through a relay server with end-to-end
 
 ## Features
 
-- 🔒 End-to-end encryption (AES-GCM or ChaCha20-Poly1305)
-- 📱 QR code-based pairing
-- 🌐 Works across devices and networks
-- 🔌 Drop-in replacement for direct XSWD connections
-- 🛡️ Zero trust - relay server never sees plaintext
+- 🔒 **End-to-end encryption** - AES-256-GCM encryption (ChaCha20-Poly1305 coming soon)
+- 📱 **QR code-based pairing** - Simple scan-to-connect workflow
+- 🌐 **Cross-device & cross-network** - Works anywhere WebSocket does
+- 🔌 **Drop-in replacement** - Use with existing XSWD clients
+- 🛡️ **Zero trust** - Relay server never sees plaintext messages
+- 🚀 **Easy integration** - As simple as WalletConnect
 
 Built on top of [xswd-relayer](https://github.com/xelis-project/xswd-relayer) for secure peer-to-peer WebSocket tunneling.
