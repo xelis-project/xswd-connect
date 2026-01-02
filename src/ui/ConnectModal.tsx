@@ -17,6 +17,12 @@ export interface ConnectModalTheme {
   borderRadius?: string
   /** Font family (default: system-ui) */
   fontFamily?: string
+  /** QR code foreground/dots color (default: #000000) */
+  qrForegroundColor?: string
+  /** QR code background color (default: #FFFFFF) */
+  qrBackgroundColor?: string
+  /** QR code center logo background color (optional, creates rounded rect behind logo) */
+  qrCenterBackgroundColor?: string
 }
 
 export interface ConnectModalProps {
@@ -68,6 +74,9 @@ export const ConnectModal = ({
     outlineColor: theme.outlineColor || `${theme.primaryColor || '#3396FF'}40`, // 40 = 25% opacity in hex
     borderRadius: theme.borderRadius || '24px',
     fontFamily: theme.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    qrForegroundColor: theme.qrForegroundColor || '#000000',
+    qrBackgroundColor: theme.qrBackgroundColor || '#FFFFFF',
+    qrCenterBackgroundColor: theme.qrCenterBackgroundColor,
   }
 
   // Detect if dark mode based on background color brightness
@@ -132,8 +141,9 @@ export const ConnectModal = ({
           }
           setQrData(data)
           const url = await generateQRCodeDataURL(data, {
-            color: isDark ? t.textColor : '#000000',
-            backgroundColor: isDark ? '#FFFFFF' : t.backgroundColor,
+            color: t.qrForegroundColor,
+            backgroundColor: t.qrBackgroundColor,
+            centerBackgroundColor: t.qrCenterBackgroundColor,
             logoUrl: appIcon,
             logoSize: 0.22,
           })
@@ -359,20 +369,20 @@ export const ConnectModal = ({
             <div
               style={{
                 backgroundColor: isDark ? '#FFFFFF' : '#F7F8F9',
-                padding: '20px',
-                borderRadius: '20px',
+                padding: '8px',
+                borderRadius: '16px',
                 display: 'inline-block',
                 marginBottom: '20px',
                 border: isDark ? 'none' : '1px solid rgba(0, 0, 0, 0.06)',
               }}
             >
               {qrCodeUrl ? (
-                <img src={qrCodeUrl} alt="QR Code" style={{ width: '260px', height: '260px', display: 'block', borderRadius: '12px' }} />
+                <img src={qrCodeUrl} alt="QR Code" style={{ width: '284px', height: '284px', display: 'block', borderRadius: '12px' }} />
               ) : (
                 <div
                   style={{
-                    width: '260px',
-                    height: '260px',
+                    width: '284px',
+                    height: '284px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
