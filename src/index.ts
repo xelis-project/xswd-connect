@@ -33,6 +33,8 @@
 export { createConnection, generateQRCodeDataURL } from './RelayerClient'
 export type { QRCodeOptions } from './RelayerClient'
 export { TunneledWebSocket } from './TunneledWebSocket'
+export { RelayClient } from './RelayClient'
+export type { ApplicationData } from './RelayClient'
 export { ConnectModal } from './ui/ConnectModal'
 export type { ConnectModalProps, ConnectModalTheme } from './ui/ConnectModal'
 export * from './types'

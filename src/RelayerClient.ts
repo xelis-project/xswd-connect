@@ -6,6 +6,7 @@ import type {
   ChannelCreationMessage,
 } from './types'
 import { TunneledWebSocket } from './TunneledWebSocket'
+import { RelayClient } from './RelayClient'
 import * as aes from './crypto/aes'
 import QRCodeStyling from 'qr-code-styling'
 
@@ -34,7 +35,7 @@ const DEFAULT_ENCRYPTION_MODE: EncryptionMode = 'aes'
  * ```
  */
 export async function createConnection(
-  options: ConnectionOptions = {}
+  options: ConnectionOptions
 ): Promise<RelayedConnection> {
   const {
     relayerUrl = DEFAULT_RELAYER_URL,
@@ -47,6 +48,11 @@ export async function createConnection(
     onClose,
   } = options
 
+  // Validate required appData
+  if (!appData) {
+    throw new Error('appData is required for XSWD relay connections')
+  }
+
   return new Promise((resolve, reject) => {
     let encryptionKey: CryptoKey | undefined
     let channelId: string
@@ -54,6 +60,7 @@ export async function createConnection(
     let tunneledSocket: TunneledWebSocket
     let timeoutHandle: ReturnType<typeof setTimeout>
     let isResolved = false
+    let relayerTimeoutSeconds: number | undefined
 
     const cleanup = () => {
       if (timeoutHandle) clearTimeout(timeoutHandle)
@@ -80,18 +87,23 @@ export async function createConnection(
       if (timeoutHandle) clearTimeout(timeoutHandle)
       onConnected?.()
 
+      // Create RelayClient wrapping the TunneledWebSocket
+      const client = new RelayClient(tunneledSocket)
+
       resolve({
         socket: tunneledSocket,
+        client, // XSWD client with .daemon, .wallet, .authorize() etc.
         qrData: createQRData(),
         qrDataObj: createQRDataObj(),
         close: () => tunneledSocket.close(),
         readyState: tunneledSocket.readyState,
+        timeoutSeconds: relayerTimeoutSeconds,
       })
     }
 
     const createQRDataObj = (): RelayerQRData => ({
       channel_id: channelId,
-      relayer: relayerUrl.replace('/ws', ''), // Remove /ws suffix for base URL
+      relayer: relayerUrl.replace(/\/ws$/, ''), // Remove /ws suffix for base URL
       encryption_mode: encryptionMode,
       encryption_key: encryptionKey ? '' : undefined, // Will be filled in createQRData
       app_data: appData,
@@ -141,19 +153,34 @@ export async function createConnection(
 
     relayerWs.addEventListener('message', async (event) => {
       try {
-        const data: ChannelCreationMessage = JSON.parse(event.data)
+        // Only handle text messages (control messages from relayer)
+        // Binary messages are encrypted data from the wallet, handled by TunneledWebSocket
+        if (typeof event.data !== 'string') {
+          return
+        }
 
+        const data = JSON.parse(event.data)
+
+        // Ignore peer_connected notification - it's handled by the tunneled socket
+        if (data.type === 'peer_connected') {
+          return
+        }
+
+        // This should be the channel creation message
         if (!data.channel_id) {
           handleError(new Error('Invalid response from relayer: missing channel_id'))
           return
         }
 
         channelId = data.channel_id
+        // Capture timeout from relayer (in seconds) - this will be displayed in the modal
+        relayerTimeoutSeconds = data.timeout
+        console.log('[RelayerClient] Relayer timeout:', relayerTimeoutSeconds, 'seconds')
 
         // Wait for encryption initialization
         await initPromise
 
-        // Create QR data with encryption key
+        // Create QR data with encryption key AND app data
         const qrDataObj: RelayerQRData = {
           channel_id: channelId,
           relayer: relayerUrl.replace('/ws', ''),
@@ -169,17 +196,18 @@ export async function createConnection(
 
         // Now wait for peer to connect
         // The relayer will forward messages once peer joins
-        // We detect peer connection when we receive the first message after QR display
+        // The wallet will have the app data from the QR code
 
         // Create tunneled socket
         tunneledSocket = new TunneledWebSocket(relayerWs, encryptionKey)
 
-        // Wait for the wallet to actually connect by listening for the first message
-        // This indicates the peer (wallet) has joined the channel
-        const handleFirstMessage = () => {
+        // Wait for any message from the wallet (indicates peer connected and relay is ready)
+        const handleFirstMessage = (event: Event) => {
           // Remove the listener - we only care about the first message
           tunneledSocket.removeEventListener('message', handleFirstMessage)
-          // Now the wallet is connected, notify and resolve
+          tunneledSocket.removeEventListener('error', handleEarlyError)
+          tunneledSocket.removeEventListener('close', handleEarlyClose)
+          // Peer is connected, resolve the connection
           handleSuccess()
         }
 

@@ -50,6 +50,17 @@ export async function importKey(keyData: string): Promise<CryptoKey> {
  * @returns Base64 encoded encrypted message with IV prepended
  */
 export async function encrypt(plaintext: string, key: CryptoKey): Promise<string> {
+  const bytes = await encryptBytes(plaintext, key)
+  return btoa(String.fromCharCode(...bytes))
+}
+
+/**
+ * Encrypt a message using AES-256-GCM to binary
+ * @param plaintext - Message to encrypt
+ * @param key - Encryption key
+ * @returns Encrypted bytes with IV prepended
+ */
+export async function encryptBytes(plaintext: string, key: CryptoKey): Promise<Uint8Array> {
   const encoder = new TextEncoder()
   const data = encoder.encode(plaintext)
 
@@ -70,8 +81,7 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
   combined.set(iv, 0)
   combined.set(new Uint8Array(encrypted), iv.length)
 
-  // Convert to base64
-  return btoa(String.fromCharCode(...combined))
+  return combined
 }
 
 /**

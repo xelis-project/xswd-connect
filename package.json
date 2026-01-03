@@ -1,6 +1,6 @@
 {
   "name": "@xelis/xswd-connect",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "JavaScript library for XSWD relayed connections - connect web dApps to mobile wallets via QR code with end-to-end encryption",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -47,6 +47,7 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
+    "@xelis/sdk": "^0.10.3",
     "qr-code-styling": "^1.9.2",
     "qrcode": "^1.5.3"
   },

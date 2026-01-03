@@ -7,6 +7,22 @@
 export type EncryptionMode = null | 'aes' | 'chacha20poly1305'
 
 /**
+ * XSWD Application data that identifies the dApp
+ */
+export interface ApplicationData {
+  /** 64-character hex application ID */
+  id: string
+  /** Application name (max 32 chars) */
+  name: string
+  /** Application description (max 255 chars) */
+  description: string
+  /** Application URL (optional, max 255 chars) */
+  url?: string
+  /** List of RPC method permissions requested */
+  permissions: string[]
+}
+
+/**
  * QR code data structure that the wallet scans
  */
 export interface RelayerQRData {
@@ -18,13 +34,8 @@ export interface RelayerQRData {
   encryption_mode: EncryptionMode
   /** Encryption key in base64 format (present if encryption_mode is not null) */
   encryption_key?: string
-  /** Optional application metadata */
-  app_data?: {
-    name?: string
-    description?: string
-    url?: string
-    icon?: string
-  }
+  /** XSWD application data for the dApp */
+  app_data?: ApplicationData
 }
 
 /**
@@ -37,8 +48,8 @@ export interface ConnectionOptions {
   encryptionMode?: EncryptionMode
   /** Maximum time to wait for peer connection in milliseconds (default: 120000) */
   timeout?: number
-  /** Optional application metadata to embed in QR code */
-  appData?: RelayerQRData['app_data']
+  /** XSWD application data to embed in QR code */
+  appData: ApplicationData
   /** Callback when QR code data is ready to display */
   onQRReady?: (qrData: RelayerQRData) => void
   /** Callback when peer successfully connects */
@@ -55,6 +66,8 @@ export interface ConnectionOptions {
 export interface RelayedConnection {
   /** WebSocket-compatible object that can be passed to XSWD client */
   socket: WebSocketLike
+  /** XSWD client with full RPC functionality (.daemon, .wallet, .authorize() etc.) */
+  client: any // RelayClient type
   /** QR code data (JSON string) ready for QR generation */
   qrData: string
   /** The parsed QR data object */
@@ -63,6 +76,18 @@ export interface RelayedConnection {
   close: () => void
   /** Current connection state */
   readyState: number
+  /** Timeout in seconds from the relayer server (for countdown display) */
+  timeoutSeconds?: number
+}
+
+/**
+ * Cancellable connection result - allows cancelling in-flight connections
+ */
+export interface CancellableConnection {
+  /** Promise that resolves when connection is established */
+  promise: Promise<RelayedConnection>
+  /** Cancel the connection attempt and cleanup resources */
+  cancel: () => void
 }
 
 /**
@@ -85,4 +110,6 @@ export interface WebSocketLike {
  */
 export interface ChannelCreationMessage {
   channel_id: string
+  /** Timeout in seconds from the relayer server */
+  timeout?: number
 }

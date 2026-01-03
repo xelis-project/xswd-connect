@@ -2,6 +2,50 @@ import { useState, useEffect } from 'react'
 import { createConnection, generateQRCodeDataURL } from '../RelayerClient'
 import type { RelayerQRData, ConnectionOptions } from '../types'
 
+// Isolated countdown timer component to avoid re-render issues
+const CountdownTimer = ({
+  initialSeconds,
+  onExpire,
+  secondaryTextColor
+}: {
+  initialSeconds: number
+  onExpire: () => void
+  secondaryTextColor: string
+}) => {
+  const [countdown, setCountdown] = useState(initialSeconds)
+
+  useEffect(() => {
+    setCountdown(initialSeconds)
+  }, [initialSeconds])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          onExpire()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [onExpire])
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  return (
+    <div style={{ fontSize: '26px', color: secondaryTextColor, margin: '5px 0', fontWeight: 500 }}>
+      Expires in {formatTime(countdown)}
+    </div>
+  )
+}
+
 export interface ConnectModalTheme {
   /** Primary accent color (default: #3396FF) */
   primaryColor?: string
@@ -36,8 +80,8 @@ export interface ConnectModalProps {
   onRelayedConnect: (socket: any) => Promise<void>
   /** Optional relayer URL override */
   relayerUrl?: string
-  /** Optional app metadata for QR code */
-  appData?: ConnectionOptions['appData']
+  /** XSWD app metadata (required for relay connections) */
+  appData: ConnectionOptions['appData']
   /** Optional theme customization */
   theme?: ConnectModalTheme
   /** App name to display */
@@ -62,8 +106,9 @@ export const ConnectModal = ({
   const [state, setState] = useState<ConnectionState>('select')
   const [qrCodeUrl, setQrCodeUrl] = useState<string>()
   const [qrData, setQrData] = useState<RelayerQRData>()
-  const [countdown, setCountdown] = useState(120)
+  const [timeoutSeconds, setTimeoutSeconds] = useState(120)
   const [error, setError] = useState<string>()
+  const [pendingConnection, setPendingConnection] = useState<{ close: () => void; timeoutSeconds?: number } | null>(null)
 
   // Apply theme defaults (WalletConnect-inspired)
   const t = {
@@ -83,35 +128,23 @@ export const ConnectModal = ({
   const isDark = theme.backgroundColor &&
     parseInt(theme.backgroundColor.slice(1, 3), 16) < 128
 
-  // Reset state when modal opens
+  // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setState('select')
       setError(undefined)
       setQrCodeUrl(undefined)
       setQrData(undefined)
-      setCountdown(120)
+      setTimeoutSeconds(120)
+    } else {
+      // Clean up any pending connection when modal closes
+      if (pendingConnection) {
+        pendingConnection.close()
+        setPendingConnection(null)
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
-
-  // Countdown timer
-  useEffect(() => {
-    if (state !== 'qr') return
-
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval)
-          setError('QR code expired - please try again')
-          setState('error')
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [state])
 
   const handleDirectConnect = async () => {
     setState('connecting')
@@ -158,26 +191,44 @@ export const ConnectModal = ({
         },
       })
 
-      await onRelayedConnect(connection.socket)
+      // Store connection reference for cleanup
+      setPendingConnection(connection)
+
+      // Set timeout from relayer (fallback to 120 if not provided)
+      if (connection.timeoutSeconds) {
+        console.log('[ConnectModal] Using relayer timeout:', connection.timeoutSeconds, 'seconds')
+        setTimeoutSeconds(connection.timeoutSeconds)
+      } else {
+        console.log('[ConnectModal] No relayer timeout, using default 120 seconds')
+      }
+
+      await onRelayedConnect(connection)
+      setPendingConnection(null) // Clear reference after successful connection
       onClose()
     } catch (err) {
+      setPendingConnection(null)
       setError(err instanceof Error ? err.message : 'Failed to connect to relay')
       setState('error')
     }
   }
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
   const handleBackToSelect = () => {
+    // Clean up any pending connection to cancel timeout
+    if (pendingConnection) {
+      pendingConnection.close()
+      setPendingConnection(null)
+    }
+
     setState('select')
     setError(undefined)
     setQrCodeUrl(undefined)
     setQrData(undefined)
-    setCountdown(120)
+    setTimeoutSeconds(120)
+  }
+
+  const handleExpire = () => {
+    setError('QR code expired - please try again')
+    setState('error')
   }
 
   if (!isOpen) return null
@@ -402,9 +453,11 @@ export const ConnectModal = ({
               )}
             </div>
 
-            <p style={{ fontSize: '13px', color: t.secondaryTextColor, margin: '0 0 20px' }}>
-              Expires in {formatTime(countdown)}
-            </p>
+            <CountdownTimer
+              initialSeconds={timeoutSeconds}
+              onExpire={handleExpire}
+              secondaryTextColor={t.secondaryTextColor}
+            />
 
             <button
               onClick={handleBackToSelect}

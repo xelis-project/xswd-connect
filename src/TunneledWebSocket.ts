@@ -42,19 +42,28 @@ export class TunneledWebSocket implements WebSocketLike {
 
     // Convert to string if needed
     if (data instanceof ArrayBuffer) {
+      console.log('[TunneledWebSocket] send: Converting ArrayBuffer to string')
       payload = new TextDecoder().decode(data)
     } else if (data instanceof Blob) {
+      console.log('[TunneledWebSocket] send: Converting Blob to string')
       payload = await data.text()
     } else {
       payload = data
     }
 
+    console.log('[TunneledWebSocket] send: Payload preview:', payload.substring(0, 100))
+
     // Encrypt if key is present
     if (this.encryptionKey) {
-      payload = await aes.encrypt(payload, this.encryptionKey)
+      console.log('[TunneledWebSocket] send: Encrypting payload')
+      const encryptedBytes = await aes.encryptBytes(payload, this.encryptionKey)
+      console.log('[TunneledWebSocket] send: Encrypted bytes length:', encryptedBytes.length)
+      console.log('[TunneledWebSocket] send: Sending binary to relayer')
+      this.relayerWs.send(encryptedBytes.buffer)
+    } else {
+      console.log('[TunneledWebSocket] send: Sending plaintext to relayer')
+      this.relayerWs.send(payload)
     }
-
-    this.relayerWs.send(payload)
   }
 
   close(code?: number, reason?: string): void {
@@ -105,17 +114,47 @@ export class TunneledWebSocket implements WebSocketLike {
   }
 
   private handleError = (event: Event) => {
+    console.error('[TunneledWebSocket] WebSocket error:', event)
     this.errorListeners.forEach(listener => listener(event))
   }
 
   private handleMessage = async (event: MessageEvent) => {
     try {
       let data = event.data
+      console.log('[TunneledWebSocket] Received message, type:', typeof data, 'instance:', data?.constructor?.name, 'encrypted:', !!this.encryptionKey)
 
       // Decrypt if key is present
-      if (this.encryptionKey && typeof data === 'string') {
-        data = await aes.decrypt(data, this.encryptionKey)
+      if (this.encryptionKey) {
+        if (typeof data === 'string') {
+          console.log('[TunneledWebSocket] Decrypting text message, length:', data.length)
+          // Text message with base64-encoded ciphertext (from dApp)
+          data = await aes.decrypt(data, this.encryptionKey)
+          console.log('[TunneledWebSocket] Text message decrypted successfully')
+        } else if (data instanceof ArrayBuffer) {
+          console.log('[TunneledWebSocket] Decrypting binary ArrayBuffer message, length:', data.byteLength)
+          // Binary message with raw bytes (from wallet) - convert to base64 first
+          const uint8Array = new Uint8Array(data)
+          const base64 = btoa(String.fromCharCode(...uint8Array))
+          console.log('[TunneledWebSocket] Converted to base64, length:', base64.length)
+          data = await aes.decrypt(base64, this.encryptionKey)
+          console.log('[TunneledWebSocket] Binary message decrypted successfully')
+        } else if (data instanceof Blob) {
+          console.log('[TunneledWebSocket] Decrypting Blob message, size:', data.size)
+          // Blob message - convert to base64 first
+          const arrayBuffer = await data.arrayBuffer()
+          const uint8Array = new Uint8Array(arrayBuffer)
+          const base64 = btoa(String.fromCharCode(...uint8Array))
+          console.log('[TunneledWebSocket] Converted blob to base64, length:', base64.length)
+          data = await aes.decrypt(base64, this.encryptionKey)
+          console.log('[TunneledWebSocket] Blob message decrypted successfully')
+          console.log('[TunneledWebSocket] Decrypted data type:', typeof data, 'preview:', data?.substring?.(0, 100))
+        } else {
+          console.warn('[TunneledWebSocket] Unknown message type:', data)
+        }
       }
+
+      console.log('[TunneledWebSocket] Final data type before forwarding:', typeof data)
+      console.log('[TunneledWebSocket] Forwarding decrypted message to', this.messageListeners.size, 'listeners')
 
       // Create new MessageEvent with decrypted data
       const newEvent = new MessageEvent('message', {
@@ -126,9 +165,14 @@ export class TunneledWebSocket implements WebSocketLike {
         ports: event.ports as any, // MessagePort[] readonly issue
       })
 
+      console.log('[TunneledWebSocket] newEvent.data type:', typeof newEvent.data)
+      console.log('[TunneledWebSocket] newEvent.data preview:', typeof newEvent.data === 'string' ? newEvent.data.substring(0, 100) : newEvent.data)
+
       this.messageListeners.forEach(listener => listener(newEvent))
     } catch (error) {
       console.error('[TunneledWebSocket] Failed to decrypt message:', error)
+      console.error('[TunneledWebSocket] Message data type:', typeof event.data)
+      console.error('[TunneledWebSocket] Error stack:', error instanceof Error ? error.stack : 'N/A')
       // Forward as error event
       const errorEvent = new ErrorEvent('error', {
         error,
