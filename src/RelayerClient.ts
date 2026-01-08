@@ -146,6 +146,7 @@ export async function createConnection(
     relayerWs.addEventListener('close', (event) => {
       if (!isResolved) {
         const reason = event.reason || (event.code === 1006 ? 'Connection failed - could not reach relayer' : 'Unknown reason')
+        cleanup();
         handleError(new Error(`Relayer connection closed: ${reason}`))
       }
       onClose?.(event)
@@ -219,6 +220,7 @@ export async function createConnection(
           tunneledSocket.removeEventListener('error', handleEarlyError)
           tunneledSocket.removeEventListener('close', handleEarlyClose)
           handleError(new Error('Connection lost before wallet connected'))
+          cleanup();
         }
 
         const handleEarlyClose = (event: Event) => {
@@ -228,6 +230,7 @@ export async function createConnection(
           if (!isResolved) {
             handleError(new Error('Connection closed before wallet connected'))
           }
+          cleanup();
         }
 
         tunneledSocket.addEventListener('error', handleEarlyError)

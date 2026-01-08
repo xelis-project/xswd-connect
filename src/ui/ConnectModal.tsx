@@ -40,7 +40,7 @@ const CountdownTimer = ({
   }
 
   return (
-    <div style={{ fontSize: '26px', color: secondaryTextColor, margin: '5px 0', fontWeight: 500 }}>
+    <div style={{ fontSize: '22px', color: secondaryTextColor, marginBottom: '10px', fontWeight: 400 }}>
       Expires in {formatTime(countdown)}
     </div>
   )
@@ -109,6 +109,7 @@ export const ConnectModal = ({
   const [timeoutSeconds, setTimeoutSeconds] = useState(120)
   const [error, setError] = useState<string>()
   const [pendingConnection, setPendingConnection] = useState<{ close: () => void; timeoutSeconds?: number } | null>(null)
+  const [copySuccess, setCopySuccess] = useState(false)
 
   // Apply theme defaults (WalletConnect-inspired)
   const t = {
@@ -136,6 +137,7 @@ export const ConnectModal = ({
       setQrCodeUrl(undefined)
       setQrData(undefined)
       setTimeoutSeconds(120)
+      setCopySuccess(false)
     } else {
       // Clean up any pending connection when modal closes
       if (pendingConnection) {
@@ -224,11 +226,24 @@ export const ConnectModal = ({
     setQrCodeUrl(undefined)
     setQrData(undefined)
     setTimeoutSeconds(120)
+    setCopySuccess(false)
   }
 
   const handleExpire = () => {
     setError('QR code expired - please try again')
     setState('error')
+  }
+
+  const handleCopyQRData = async () => {
+    if (!qrData) return
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(qrData))
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy QR data:', err)
+    }
   }
 
   if (!isOpen) return null
@@ -401,7 +416,7 @@ export const ConnectModal = ({
                 </svg>
               </div>
               <div style={{ textAlign: 'left', flex: 1 }}>
-                <div style={{ lineHeight: '20px' }}>Mobile Wallet</div>
+                <div style={{ lineHeight: '20px' }}>Mobile/Relayed Wallet</div>
                 <div style={{ fontSize: '13px', color: t.secondaryTextColor, marginTop: '2px', lineHeight: '16px' }}>
                   Scan QR code with your phone
                 </div>
@@ -423,7 +438,7 @@ export const ConnectModal = ({
                 padding: '8px',
                 borderRadius: '16px',
                 display: 'inline-block',
-                marginBottom: '20px',
+                marginBottom: '5px',
                 border: isDark ? 'none' : '1px solid rgba(0, 0, 0, 0.06)',
               }}
             >
@@ -452,6 +467,72 @@ export const ConnectModal = ({
                 </div>
               )}
             </div>
+
+            {/* TODO: Cleanup TSX */}
+            <button
+              onClick={handleCopyQRData}
+              disabled={!qrData}
+              style={{
+                background: !qrData
+                  ? (isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)')
+                  : copySuccess
+                    ? (isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.1)')
+                    : (isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)'),
+                border: !qrData
+                  ? (isDark ? '1px solid rgba(255, 255, 255, 0.04)' : '1px solid rgba(0, 0, 0, 0.04)')
+                  : copySuccess
+                    ? '1px solid rgba(34, 197, 94, 0.3)'
+                    : (isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)'),
+                borderRadius: '12px',
+                color: !qrData
+                  ? (isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)')
+                  : copySuccess
+                    ? '#22c55e'
+                    : t.textColor,
+                padding: '10px 20px',
+                cursor: !qrData ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: 500,
+                transition: 'all 0.15s ease',
+                margin: 'auto',
+                marginTop: '0px',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                width: '100%',
+                maxWidth: '284px',
+                opacity: !qrData ? 0.5 : 1,
+              }}
+              onMouseOver={(e) => {
+                if (!copySuccess && qrData) {
+                  e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)'
+                }
+              }}
+              onMouseOut={(e) => {
+                if (!copySuccess && qrData) {
+                  e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)'
+                }
+              }}
+            >
+              {copySuccess ? (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Copy Connection Data
+                </>
+              )}
+            </button>
 
             <CountdownTimer
               initialSeconds={timeoutSeconds}
