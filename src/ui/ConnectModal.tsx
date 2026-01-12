@@ -92,6 +92,11 @@ export interface ConnectModalProps {
 
 type ConnectionState = 'select' | 'qr' | 'connecting' | 'error'
 
+// Detect Brave browser
+const isBrave = () => {
+  return (navigator as any).brave && typeof (navigator as any).brave.isBrave === 'function'
+}
+
 export const ConnectModal = ({
   isOpen,
   onClose,
@@ -110,6 +115,12 @@ export const ConnectModal = ({
   const [error, setError] = useState<string>()
   const [pendingConnection, setPendingConnection] = useState<{ close: () => void; timeoutSeconds?: number } | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [showBraveAlert, setShowBraveAlert] = useState(false)
+
+  // Check if Brave browser on mount
+  useEffect(() => {
+    setShowBraveAlert(isBrave())
+  }, [])
 
   // Apply theme defaults (WalletConnect-inspired)
   const t = {
@@ -321,6 +332,91 @@ export const ConnectModal = ({
             Connect Wallet
           </h2>
         </div>
+
+        {/* Brave Browser Alert */}
+        {state === 'select' && showBraveAlert && (
+          <div
+            style={{
+              marginBottom: '16px',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              background: isDark ? 'rgba(255, 159, 10, 0.12)' : 'rgba(255, 159, 10, 0.1)',
+              border: `1px solid ${isDark ? 'rgba(255, 159, 10, 0.3)' : 'rgba(255, 159, 10, 0.25)'}`,
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'flex-start',
+            }}
+          >
+            <div
+              style={{
+                flexShrink: 0,
+                marginTop: '2px',
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#FFB340' : '#FF9F0A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: isDark ? '#FFB340' : '#FF9F0A',
+                  marginBottom: '4px',
+                  lineHeight: '18px',
+                }}
+              >
+                Brave Browser Detected
+              </div>
+              <div
+                style={{
+                  fontSize: '13px',
+                  color: isDark ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.7)',
+                  lineHeight: '18px',
+                }}
+              >
+                To connect to a local wallet, enable "Enable Localhost access permission prompt" in{' '}
+                <code style={{
+                  fontSize: '12px',
+                  padding: '1px 4px',
+                  borderRadius: '3px',
+                  background: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+                  fontFamily: 'monospace',
+                }}>
+                  brave://flags/
+                </code>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowBraveAlert(false)}
+              style={{
+                flexShrink: 0,
+                background: 'transparent',
+                border: 'none',
+                color: isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)',
+                cursor: 'pointer',
+                fontSize: '16px',
+                lineHeight: 1,
+                padding: '0',
+                width: '16px',
+                height: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color 0.2s',
+                marginTop: '1px',
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.7)'}
+              onMouseOut={(e) => e.currentTarget.style.color = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Connection method selection */}
         {state === 'select' && (
