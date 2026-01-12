@@ -386,7 +386,7 @@ export const ConnectModal = ({
                   background: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
                   fontFamily: 'monospace',
                 }}>
-                  brave://flags/
+                  brave://flags/#brave-localhost-access-permission
                 </code>
               </div>
             </div>
