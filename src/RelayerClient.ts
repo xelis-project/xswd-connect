@@ -292,7 +292,12 @@ export async function generateQRCodeDataURL(
           margin: 8, // Gap around the logo
           imageSize: logoSize,
           hideBackgroundDots: true, // Hide dots behind the image
-        } : undefined,
+        } : {
+          crossOrigin: 'anonymous',
+          margin: 8,
+          imageSize: 0,
+          hideBackgroundDots: false,
+        },
         dotsOptions: {
           color,
           type: 'rounded', // Rounded dots for prettier appearance
