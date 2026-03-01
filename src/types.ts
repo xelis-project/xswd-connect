@@ -1,10 +1,18 @@
 /**
- * Encryption mode for the relayed connection
- * - null: No encryption (not recommended for production)
- * - aes: AES-256-GCM encryption (recommended)
- * - chacha20poly1305: ChaCha20-Poly1305 encryption (future support)
+ * Encryption key type - 32 bytes (256 bits) encoded as hex string
  */
-export type EncryptionMode = null | 'aes' | 'chacha20poly1305'
+export type EncryptionKey = string
+
+/**
+ * Encryption mode for the relayed connection
+ * - AES: AES-256-GCM encryption (recommended)
+ * - Chacha20Poly1305: ChaCha20-Poly1305 encryption
+ */
+export type EncryptionMode = 'aes' | 'chacha20poly1305'
+export interface Encryption {
+  mode: EncryptionMode
+  key: EncryptionKey
+}
 
 /**
  * XSWD Application data that identifies the dApp
@@ -30,10 +38,8 @@ export interface RelayerQRData {
   channel_id: string
   /** WebSocket URL of the relayer server */
   relayer: string
-  /** Encryption mode and key (base64 encoded if encrypted) */
-  encryption_mode: EncryptionMode
-  /** Encryption key in base64 format (present if encryption_mode is not null) */
-  encryption_key?: string
+  /** Encryption mode with key (hex encoded) */
+  encryption_mode?: Encryption
   /** XSWD application data for the dApp */
   app_data?: ApplicationData
 }
@@ -44,7 +50,7 @@ export interface RelayerQRData {
 export interface ConnectionOptions {
   /** Relayer server WebSocket URL (default: official XELIS relayer) */
   relayerUrl?: string
-  /** Encryption mode to use (default: 'aes') */
+  /** Encryption mode to use (default: AES) */
   encryptionMode?: EncryptionMode
   /** Maximum time to wait for peer connection in milliseconds (default: 120000) */
   timeout?: number
