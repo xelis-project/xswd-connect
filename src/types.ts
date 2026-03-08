@@ -59,7 +59,7 @@ export interface ConnectionOptions {
   /** XSWD application data to embed in QR code */
   appData: ApplicationData
   /** Callback when QR code data is ready to display */
-  onQRReady?: (qrData: RelayerQRData) => void
+  onQRReady?: (qrData: RelayerQRData | null) => void
   /** Callback when peer successfully connects */
   onConnected?: () => void
   /** Callback when connection fails or times out */

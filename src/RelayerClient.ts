@@ -97,7 +97,7 @@ export async function createConnection(
       cleanup()
 
       // Clear QR data on error
-      onQRReady?.(null as any)
+      onQRReady?.(null)
 
       onError?.(error)
       reject(error)
@@ -112,15 +112,22 @@ export async function createConnection(
       // Create RelayClient wrapping the TunneledWebSocket
       const client = new RelayClient(tunneledSocket)
 
-      resolve({
+      const result: RelayedConnection = {
         socket: tunneledSocket,
-        client, // XSWD client with .daemon, .wallet, .authorize() etc.
+        client,
         qrData: createQRData(),
         qrDataObj: createQRDataObj(),
         close: () => tunneledSocket.close(),
-        readyState: tunneledSocket.readyState,
+        readyState: 0, // placeholder, overridden below
         timeoutSeconds: relayerTimeoutSeconds,
+      }
+
+      Object.defineProperty(result, 'readyState', {
+        get: () => tunneledSocket.readyState,
+        enumerable: true,
       })
+
+      resolve(result)
     }
 
     const createQRDataObj = (): RelayerQRData => ({
