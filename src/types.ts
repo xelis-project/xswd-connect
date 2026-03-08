@@ -36,7 +36,9 @@ export interface ApplicationData {
 export interface RelayerQRData {
   /** UUID of the relay channel */
   channel_id: string
-  /** WebSocket URL of the relayer server */
+  /** Relay server Base URL*/
+  endpoint: string
+  /** WebSocket URL of the relayer server in full */
   relayer: string
   /** Encryption mode with key (hex encoded) */
   encryption_mode?: Encryption

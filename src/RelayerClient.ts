@@ -14,6 +14,27 @@ const DEFAULT_RELAYER_URL = 'wss://relay.xelis.io/ws'
 const DEFAULT_TIMEOUT = 120000 // 2 minutes
 const DEFAULT_ENCRYPTION_MODE: EncryptionMode = 'aes'
 
+// ---- helpers ----
+
+function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read blob'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
+    img.src = src
+  })
+}
+
 /**
  * Create a relayed connection to an XSWD wallet
  *
@@ -55,6 +76,7 @@ export async function createConnection(
 
   return new Promise((resolve, reject) => {
     let encryptionKey: CryptoKey | undefined
+    let exportedKey: string | undefined
     let channelId: string
     let relayerWs: WebSocket
     let tunneledSocket: TunneledWebSocket
@@ -103,24 +125,16 @@ export async function createConnection(
 
     const createQRDataObj = (): RelayerQRData => ({
       channel_id: channelId,
-      relayer: relayerUrl.replace(/\/ws$/, ''), // Remove /ws suffix for base URL
-      encryption_mode: encryptionMode,
-      encryption_key: encryptionKey ? '' : undefined, // Will be filled in createQRData
+      endpoint: relayerUrl.replace(/\/ws$/, ''), // Remove /ws suffix for base URL
+      relayer: `${relayerUrl}/${channelId}`,
+      encryption_mode: {
+        mode: encryptionMode,
+        key: exportedKey ?? '',
+      },
       app_data: appData,
     })
 
-    const createQRData = (): string => {
-      const qrObj = createQRDataObj()
-
-      // Add encryption key if present
-      if (encryptionKey) {
-        // Export key synchronously if possible, otherwise we need to rework this
-        // For now, we'll handle it in the async initialization
-        return '' // Placeholder, will be set properly
-      }
-
-      return JSON.stringify(qrObj)
-    }
+    const createQRData = (): string => JSON.stringify(createQRDataObj())
 
     // Setup timeout
     timeoutHandle = setTimeout(() => {
@@ -131,8 +145,9 @@ export async function createConnection(
     const initPromise = (async () => {
       if (encryptionMode === 'aes') {
         encryptionKey = await aes.generateKey()
+        exportedKey = await aes.exportKey(encryptionKey)
       } else if (encryptionMode === 'chacha20poly1305') {
-        throw new Error('ChaCha20-Poly1305 encryption not yet implemented')
+        throw new Error('ChaCha20-Poly1305 not yet implemented')
       }
     })()
 
@@ -182,18 +197,7 @@ export async function createConnection(
         await initPromise
 
         // Create QR data with encryption key AND app data
-        const qrDataObj: RelayerQRData = {
-          channel_id: channelId,
-          relayer: relayerUrl.replace('/ws', ''),
-          encryption_mode: encryptionMode,
-          encryption_key: encryptionKey ? await aes.exportKey(encryptionKey) : undefined,
-          app_data: appData,
-        }
-
-        const qrData = JSON.stringify(qrDataObj)
-
-        // Notify that QR is ready
-        onQRReady?.(qrDataObj)
+        onQRReady?.(createQRDataObj())
 
         // Now wait for peer to connect
         // The relayer will forward messages once peer joins
@@ -276,140 +280,96 @@ export async function generateQRCodeDataURL(
     logoSize = 0.22,
   } = options
 
-  return new Promise((resolve, reject) => {
-    try {
-      // Render at 3x resolution for sharper quality
-      const qrCode = new QRCodeStyling({
-        width: 900,
-        height: 900,
-        data,
-        margin: 0, // No margin - QR fills the entire canvas
-        qrOptions: {
-          errorCorrectionLevel: logoUrl ? 'H' : 'M',
-        },
-        imageOptions: logoUrl ? {
-          crossOrigin: 'anonymous',
-          margin: 8, // Gap around the logo
-          imageSize: logoSize,
-          hideBackgroundDots: true, // Hide dots behind the image
-        } : {
-          crossOrigin: 'anonymous',
-          margin: 8,
-          imageSize: 0,
-          hideBackgroundDots: false,
-        },
-        dotsOptions: {
-          color,
-          type: 'rounded', // Rounded dots for prettier appearance
-        },
-        backgroundOptions: {
-          color: backgroundColor,
-        },
-        cornersSquareOptions: {
-          color,
-          type: 'extra-rounded', // Rounded corner squares
-        },
-        cornersDotOptions: {
-          color,
-          type: 'dot', // Round dots in corners
-        },
-        image: logoUrl,
-      })
-
-      // Get the raw canvas to draw custom background
-      const canvas = document.createElement('canvas')
-
-      qrCode.getRawData('png').then((data) => {
-        if (!data) {
-          reject(new Error('Failed to generate QR code'))
-          return
-        }
-
-        // Handle both Blob (browser) and Buffer (Node.js)
-        let blob: Blob
-        if (data instanceof Blob) {
-          blob = data
-        } else {
-          // Convert Buffer to Blob for browser environment
-          blob = new Blob([data as any])
-        }
-
-        // If we need to add a center background, draw it on the canvas
-        if (centerBackgroundColor && logoUrl) {
-          const reader = new FileReader()
-          reader.onload = () => {
-            const img = new Image()
-            img.onload = () => {
-              canvas.width = img.width
-              canvas.height = img.height
-              const ctx = canvas.getContext('2d')
-              if (!ctx) {
-                reject(new Error('Failed to get canvas context'))
-                return
-              }
-
-              // Draw the QR code
-              ctx.drawImage(img, 0, 0)
-
-              // Calculate center area size (logo area + margin)
-              const centerSize = canvas.width * (logoSize + 0.05) // Add extra 5% for padding
-              const x = (canvas.width - centerSize) / 2
-              const y = (canvas.height - centerSize) / 2
-              const borderRadius = centerSize * 0.15 // 15% border radius
-
-              // Draw rounded rectangle behind logo
-              ctx.fillStyle = centerBackgroundColor
-              ctx.beginPath()
-              ctx.moveTo(x + borderRadius, y)
-              ctx.lineTo(x + centerSize - borderRadius, y)
-              ctx.quadraticCurveTo(x + centerSize, y, x + centerSize, y + borderRadius)
-              ctx.lineTo(x + centerSize, y + centerSize - borderRadius)
-              ctx.quadraticCurveTo(x + centerSize, y + centerSize, x + centerSize - borderRadius, y + centerSize)
-              ctx.lineTo(x + borderRadius, y + centerSize)
-              ctx.quadraticCurveTo(x, y + centerSize, x, y + centerSize - borderRadius)
-              ctx.lineTo(x, y + borderRadius)
-              ctx.quadraticCurveTo(x, y, x + borderRadius, y)
-              ctx.closePath()
-              ctx.fill()
-
-              // Draw the logo on top (load it again to overlay)
-              const logoImg = new Image()
-              logoImg.crossOrigin = 'anonymous'
-              logoImg.onload = () => {
-                const logoDisplaySize = canvas.width * logoSize
-                const logoX = (canvas.width - logoDisplaySize) / 2
-                const logoY = (canvas.height - logoDisplaySize) / 2
-
-                // Enable high-quality image smoothing for better downscaling
-                ctx.imageSmoothingEnabled = true
-                ctx.imageSmoothingQuality = 'high'
-
-                ctx.drawImage(logoImg, logoX, logoY, logoDisplaySize, logoDisplaySize)
-                resolve(canvas.toDataURL())
-              }
-              logoImg.onerror = () => {
-                // If logo fails, just return QR with background
-                resolve(canvas.toDataURL())
-              }
-              logoImg.src = logoUrl
-            }
-            img.onerror = () => reject(new Error('Failed to load QR image'))
-            img.src = reader.result as string
-          }
-          reader.onerror = () => reject(new Error('Failed to read QR code blob'))
-          reader.readAsDataURL(blob)
-        } else {
-          // No center background needed, just return the QR code
-          const reader = new FileReader()
-          reader.onload = () => {
-            resolve(reader.result as string)
-          }
-          reader.onerror = () => reject(new Error('Failed to read QR code blob'))
-          reader.readAsDataURL(blob)
-        }
-      }).catch(reject)
-    } catch (error) {
-      reject(error)
-    }
+  const qrCode = new QRCodeStyling({
+    width: 900,
+    height: 900,
+    data,
+    margin: 0,
+    qrOptions: {
+      errorCorrectionLevel: logoUrl ? 'H' : 'M',
+    },
+    imageOptions: {
+      crossOrigin: 'anonymous',
+      margin: 8,
+      imageSize: logoUrl ? logoSize : 0,
+      hideBackgroundDots: !!logoUrl,
+    },
+    dotsOptions: {
+      color,
+      type: 'rounded',
+    },
+    backgroundOptions: {
+      color: backgroundColor,
+    },
+    cornersSquareOptions: {
+      color,
+      type: 'extra-rounded',
+    },
+    cornersDotOptions: {
+      color,
+      type: 'dot',
+    },
+    image: logoUrl,
   })
+
+  const rawData = await qrCode.getRawData('png')
+  if (!rawData) {
+    throw new Error('Failed to generate QR code')
+  }
+
+  const blob = rawData instanceof Blob ? rawData : new Blob([rawData as any])
+
+  // No center background needed — return QR directly
+  if (!centerBackgroundColor || !logoUrl) {
+    return blobToDataURL(blob)
+  }
+
+  // Draw QR with a rounded-rect background behind the logo
+  const qrDataURL = await blobToDataURL(blob)
+  const qrImg = await loadImage(qrDataURL)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = qrImg.width
+  canvas.height = qrImg.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Failed to get canvas context')
+
+  // Draw QR base
+  ctx.drawImage(qrImg, 0, 0)
+
+  // Draw rounded rectangle behind logo
+  const centerSize = canvas.width * (logoSize + 0.05)
+  const x = (canvas.width - centerSize) / 2
+  const y = (canvas.height - centerSize) / 2
+  const r = centerSize * 0.15
+
+  ctx.fillStyle = centerBackgroundColor
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + centerSize - r, y)
+  ctx.quadraticCurveTo(x + centerSize, y, x + centerSize, y + r)
+  ctx.lineTo(x + centerSize, y + centerSize - r)
+  ctx.quadraticCurveTo(x + centerSize, y + centerSize, x + centerSize - r, y + centerSize)
+  ctx.lineTo(x + r, y + centerSize)
+  ctx.quadraticCurveTo(x, y + centerSize, x, y + centerSize - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+  ctx.fill()
+
+  // Overlay logo
+  try {
+    const logoImg = await loadImage(logoUrl)
+    const logoDisplaySize = canvas.width * logoSize
+    const logoX = (canvas.width - logoDisplaySize) / 2
+    const logoY = (canvas.height - logoDisplaySize) / 2
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(logoImg, logoX, logoY, logoDisplaySize, logoDisplaySize)
+  } catch {
+    // Logo failed to load — return QR with background rect only
+  }
+
+  return canvas.toDataURL()
 }
