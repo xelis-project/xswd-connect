@@ -31,19 +31,35 @@ export interface ApplicationData {
 }
 
 /**
- * QR code data structure that the wallet scans
+ * QR code data structure matching the official XELIS standard.
+ * Contains only the fields that wallet backends need to establish a connection.
+ * Any front-end-only or dApp-specific additions belong in {@link RelayerQRDataExtended}.
  */
 export interface RelayerQRData {
-  /** UUID of the relay channel */
-  channel_id: string
-  /** Relay server Base URL*/
-  endpoint: string
+  /** XSWD application data for the dApp */
+  app_data: ApplicationData
   /** WebSocket URL of the relayer server in full */
   relayer: string
   /** Encryption mode with key (hex encoded) */
-  encryption_mode?: Encryption
-  /** XSWD application data for the dApp */
-  app_data?: ApplicationData
+  encryption_mode: Encryption
+}
+
+/**
+ * Extra connection metadata for dApp front-end use.
+ *
+ * These fields are **not** part of the XELIS standard and are not required by
+ * wallet backends. They exist so dApp developers can surface useful connection
+ * metadata in their own UIs (diagnostics, debug panels, deep-links, analytics,
+ * etc.) without polluting the lean standard QR payload.
+ *
+ * Always present as `metadata` on the {@link RelayedConnection} result.
+ * New front-end-only fields should be added here.
+ */
+export interface ConnectionMetadata {
+  /** UUID of the relay channel */
+  channel_id: string
+  /** Relay server base URL (relayer URL without the channel path) */
+  endpoint: string
 }
 
 /**
@@ -86,6 +102,8 @@ export interface RelayedConnection {
   readyState: number
   /** Timeout in seconds from the relayer server (for countdown display) */
   timeoutSeconds?: number
+  /** Additional connection metadata for front-end use (not part of the QR payload) */
+  metadata: ConnectionMetadata
 }
 
 /**

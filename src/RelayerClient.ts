@@ -120,6 +120,10 @@ export async function createConnection(
         close: () => tunneledSocket.close(),
         readyState: 0, // placeholder, overridden below
         timeoutSeconds: relayerTimeoutSeconds,
+        metadata: {
+          channel_id: channelId,
+          endpoint: relayerUrl.replace(/\/ws$/, ''),
+        },
       }
 
       Object.defineProperty(result, 'readyState', {
@@ -131,14 +135,12 @@ export async function createConnection(
     }
 
     const createQRDataObj = (): RelayerQRData => ({
-      channel_id: channelId,
-      endpoint: relayerUrl.replace(/\/ws$/, ''), // Remove /ws suffix for base URL
+      app_data: appData,
       relayer: `${relayerUrl}/${channelId}`,
       encryption_mode: {
         mode: encryptionMode,
         key: exportedKey ?? '',
       },
-      app_data: appData,
     })
 
     const createQRData = (): string => JSON.stringify(createQRDataObj())
