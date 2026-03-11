@@ -18,22 +18,24 @@ export async function generateKey(): Promise<CryptoKey> {
 }
 
 /**
- * Export a CryptoKey to base64 string for embedding in QR code
+ * Export a CryptoKey to hex string for embedding in QR code
  * @param key - The CryptoKey to export
- * @returns Base64 encoded key
- */
+ * @returns Hex encoded key
+ */     
 export async function exportKey(key: CryptoKey): Promise<string> {
   const exported = await crypto.subtle.exportKey('raw', key)
-  return btoa(String.fromCharCode(...new Uint8Array(exported)))
+  return Array.from(new Uint8Array(exported))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 /**
- * Import a CryptoKey from base64 string (from QR code)
- * @param keyData - Base64 encoded key
+ * Import a CryptoKey from hex string (from QR code)
+ * @param keyData - Hex encoded key
  * @returns Imported CryptoKey
  */
 export async function importKey(keyData: string): Promise<CryptoKey> {
-  const raw = Uint8Array.from(atob(keyData), c => c.charCodeAt(0))
+  const raw = new Uint8Array(keyData.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
   return crypto.subtle.importKey(
     'raw',
     raw,

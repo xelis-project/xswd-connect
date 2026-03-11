@@ -1,10 +1,18 @@
 /**
- * Encryption mode for the relayed connection
- * - null: No encryption (not recommended for production)
- * - aes: AES-256-GCM encryption (recommended)
- * - chacha20poly1305: ChaCha20-Poly1305 encryption (future support)
+ * Encryption key type - 32 bytes (256 bits) encoded as hex string
  */
-export type EncryptionMode = null | 'aes' | 'chacha20poly1305'
+export type EncryptionKey = string
+
+/**
+ * Encryption mode for the relayed connection
+ * - AES: AES-256-GCM encryption (recommended)
+ * - Chacha20Poly1305: ChaCha20-Poly1305 encryption
+ */
+export type EncryptionMode = 'aes' | 'chacha20poly1305'
+export interface Encryption {
+  mode: EncryptionMode
+  key: EncryptionKey
+}
 
 /**
  * XSWD Application data that identifies the dApp
@@ -23,19 +31,35 @@ export interface ApplicationData {
 }
 
 /**
- * QR code data structure that the wallet scans
+ * QR code data structure matching the official XELIS standard.
+ * Contains only the fields that wallet backends need to establish a connection.
+ * Any front-end-only or dApp-specific additions belong in {@link RelayerQRDataExtended}.
  */
 export interface RelayerQRData {
+  /** XSWD application data for the dApp */
+  app_data: ApplicationData
+  /** WebSocket URL of the relayer server in full */
+  relayer: string
+  /** Encryption mode with key (hex encoded) */
+  encryption_mode: Encryption
+}
+
+/**
+ * Extra connection metadata for dApp front-end use.
+ *
+ * These fields are **not** part of the XELIS standard and are not required by
+ * wallet backends. They exist so dApp developers can surface useful connection
+ * metadata in their own UIs (diagnostics, debug panels, deep-links, analytics,
+ * etc.) without polluting the lean standard QR payload.
+ *
+ * Always present as `metadata` on the {@link RelayedConnection} result.
+ * New front-end-only fields should be added here.
+ */
+export interface ConnectionMetadata {
   /** UUID of the relay channel */
   channel_id: string
-  /** WebSocket URL of the relayer server */
-  relayer: string
-  /** Encryption mode and key (base64 encoded if encrypted) */
-  encryption_mode: EncryptionMode
-  /** Encryption key in base64 format (present if encryption_mode is not null) */
-  encryption_key?: string
-  /** XSWD application data for the dApp */
-  app_data?: ApplicationData
+  /** Relay server base URL (relayer URL without the channel path) */
+  endpoint: string
 }
 
 /**
@@ -44,14 +68,14 @@ export interface RelayerQRData {
 export interface ConnectionOptions {
   /** Relayer server WebSocket URL (default: official XELIS relayer) */
   relayerUrl?: string
-  /** Encryption mode to use (default: 'aes') */
+  /** Encryption mode to use (default: AES) */
   encryptionMode?: EncryptionMode
   /** Maximum time to wait for peer connection in milliseconds (default: 120000) */
   timeout?: number
   /** XSWD application data to embed in QR code */
   appData: ApplicationData
   /** Callback when QR code data is ready to display */
-  onQRReady?: (qrData: RelayerQRData) => void
+  onQRReady?: (qrData: RelayerQRData | null) => void
   /** Callback when peer successfully connects */
   onConnected?: () => void
   /** Callback when connection fails or times out */
@@ -78,6 +102,8 @@ export interface RelayedConnection {
   readyState: number
   /** Timeout in seconds from the relayer server (for countdown display) */
   timeoutSeconds?: number
+  /** Additional connection metadata for front-end use (not part of the QR payload) */
+  metadata: ConnectionMetadata
 }
 
 /**
