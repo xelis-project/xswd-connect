@@ -9,7 +9,7 @@ import { WalletMethods } from '@xelis/sdk/wallet/websocket'
 import type { ApplicationData } from '@xelis/sdk/xswd/types'
 import type { WebSocketLike } from './types'
 
-export { ApplicationData }
+export type { ApplicationData }
 
 /**
  * RelayClient extends WSRPC but uses an existing TunneledWebSocket
